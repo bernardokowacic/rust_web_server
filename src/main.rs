@@ -1,13 +1,18 @@
 use std::{
     fs, io::{prelude::*, BufReader}, net::{TcpListener, TcpStream}, thread, time::Duration
 };
+use rust::ThreadPool;
 
 fn main() {
     let listener = TcpListener::bind("127.0.0.1:8080").unwrap();
+    let pool = ThreadPool::new(4);
 
     for stream in listener.incoming() {
         let stream = stream.unwrap();
-        handle_connection(stream)
+
+        pool.execute(|| {
+            handle_connection(stream);
+        });
     }
 }
 
@@ -15,7 +20,7 @@ fn handle_connection(mut stream: TcpStream) {
     let buf_reader = BufReader::new(&mut stream);
     let request_line = buf_reader.lines().next().unwrap().unwrap();
 
-    let (status, contents, length) = match &request_line[..] {
+    let (status, length, contents) = match &request_line[..] {
         "GET / HTTP/1.1" => {
             let status = "HTTP/1.1 200 OK";
             let contents = fs::read_to_string("json_file.json").unwrap();
@@ -23,18 +28,18 @@ fn handle_connection(mut stream: TcpStream) {
         
             (status, length, contents)
         },
-        "GET /sleep HTTP:/1.1" => {
+        "GET /sleep HTTP/1.1" => {
             let status = "HTTP/1.1 200 OK";
             let contents = fs::read_to_string("json_file.json").unwrap();
             let length = contents.len();
 
-            thread::sleep(Duration::from_secs(5));
+            thread::sleep(Duration::from_secs(10));
 
             (status, length, contents)
         },
         _ => {
             let status = "HTTP/1.1 404 not found";
-            let contents = fs::read_to_string("404.html").unwrap();
+            let contents = String::new();
             let length = contents.len();
         
             (status, length, contents)
